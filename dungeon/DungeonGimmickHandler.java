@@ -14,7 +14,7 @@ import java.util.*;
 
 public class DungeonGimmickHandler {
 
-    public static final List<RoomData> COMBAT_ROOMS  = new ArrayList<>();
+    public static final List<RoomData> COMBAT_ROOMS   = new ArrayList<>();
     public static final List<RoomData> MINIBOSS_ROOMS = new ArrayList<>();
     public static boolean BOSS_DEFEATED = false;
     public static boolean BOSS_SPAWNED  = false;
@@ -28,26 +28,22 @@ public class DungeonGimmickHandler {
             ServerLevel level = server.getLevel(net.minecraft.world.level.Level.OVERWORLD);
             if (level == null) return;
 
-            // 보스 스폰 감지
             if (!BOSS_SPAWNED && PORTAL_POS != null) {
                 AABB bossArea = AABB.ofSize(PORTAL_POS.getCenter(), 40, 20, 60);
                 if (!level.getEntitiesOfClass(ServerPlayer.class, bossArea).isEmpty()) {
                     BOSS_SPAWNED = true;
-                    // 단상 정중앙: PORTAL_POS(z+l-3)에서 -11 = z+l/2 (z+14)
                     DungeonSpawner.spawnBossRoom(level, PORTAL_POS.offset(0, 1, -11));
                     for (ServerPlayer p : level.getEntitiesOfClass(ServerPlayer.class, bossArea))
-                        p.displayClientMessage(Component.literal("§4§l[던전] 보스가 강림했다!"), false);
+                        p.displayClientMessage(Component.literal("§4§l[던전] 수호자가 강림했다!"), false);
                 }
             }
 
-            // 귀환 글로우스톤 감지 (보스 처치 후)
             if (BOSS_DEFEATED && PORTAL_POS != null) {
-                AABB glowArea = AABB.ofSize(PORTAL_POS.getCenter(), 3, 2, 1);
+                AABB glowArea = AABB.ofSize(PORTAL_POS.getCenter(), 3, 2, 3);
                 for (ServerPlayer p : level.getEntitiesOfClass(ServerPlayer.class, glowArea))
                     DungeonManager.teleportBack(p);
             }
 
-            // 전투방 체크
             for (RoomData room : COMBAT_ROOMS) {
                 if (room.cleared) continue;
                 if (level.getEntitiesOfClass(ServerPlayer.class, room.bounds).isEmpty()) continue;
@@ -85,19 +81,15 @@ public class DungeonGimmickHandler {
         if (BOSS_DEFEATED) return;
         BOSS_DEFEATED = true;
         for (BlockPos d : BOSS_DOORS) level.setBlock(d, Blocks.AIR.defaultBlockState(), 3);
-        for (BlockPos c : BOSS_CHESTS) {
-            BlockPos ab = c.above();
-            if (level.getBlockState(ab).is(Blocks.IRON_BARS)) level.setBlock(ab, Blocks.AIR.defaultBlockState(), 3);
-        }
-        // 글로우스톤 포탈 생성 (끝 벽 바닥)
         if (PORTAL_POS != null) {
             for (int dx = -1; dx <= 1; dx++)
-                level.setBlock(PORTAL_POS.offset(dx, 0, 0), Blocks.GLOWSTONE.defaultBlockState(), 3);
+                for (int dz = -1; dz <= 1; dz++)
+                    level.setBlock(PORTAL_POS.offset(dx, 0, dz), Blocks.GLOWSTONE.defaultBlockState(), 3);
         }
         AABB area = AABB.ofSize(bossPos.getCenter(), 50, 20, 50);
         for (ServerPlayer p : level.getEntitiesOfClass(ServerPlayer.class, area)) {
-            p.displayClientMessage(Component.literal("§6§l[던전] 보스를 처치했다! 귀환 포탈이 열렸다!"), false);
-            p.displayClientMessage(Component.literal("§e끝 벽의 발받는 팔다달을 밟지세요."), false);
+            p.displayClientMessage(Component.literal("§6§l[던전] 수호자를 처치했다!"), false);
+            p.displayClientMessage(Component.literal("§e끝 벽의 밝나는 발판을 밟지세요."), false);
         }
     }
 
