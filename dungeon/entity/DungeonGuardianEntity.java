@@ -2,6 +2,7 @@ package com.example.cosmod.dungeon.entity;
 
 import com.example.cosmod.dungeon.DungeonGimmickHandler;
 import com.example.cosmod.dungeon.DungeonManager;
+import com.example.cosmod.dungeon.DungeonDropTable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -64,9 +65,8 @@ public class DungeonGuardianEntity extends Monster implements GeoEntity {
     private int roarTick      = 0;
     private int animResetTick = 0;
 
-    // 가드 관련
-    private static final int GUARD_CD_P1      = 600;  // 1페이즈: 30초
-    private static final int GUARD_CD_P2      = 500;  // 2페이즈: 25초
+    private static final int GUARD_CD_P1      = 600;
+    private static final int GUARD_CD_P2      = 500;
     private static final int GUARD_VARIANCE   = 60;
     private static final int GUARD_DURATION   = 100;
     private static final int GUARD_WARN_TICKS = 40;
@@ -75,12 +75,10 @@ public class DungeonGuardianEntity extends Monster implements GeoEntity {
     private boolean guardActive   = false;
     private int     guardDuration = 0;
 
-    // 점적석 낙하 관련
     private static final int STALAGTITE_CD = 400;
     private int stalagtiteTick = STALAGTITE_CD;
     private final Map<Integer, double[]> fallingDripstones = new HashMap<>();
 
-    // 화염구 추적 Map: entityId → [spawnX, spawnY, spawnZ, dirX, dirY, dirZ, lifeTick]
     private final Map<Integer, double[]> trackedFireballs = new HashMap<>();
     private static final int FIREBALL_CD_P1 = 140;
     private static final int FIREBALL_CD_P2 = 80;
@@ -184,20 +182,18 @@ public class DungeonGuardianEntity extends Monster implements GeoEntity {
     @Override
     public void die(DamageSource src) {
         playAnim(AnimState.DEATH);
-        broadcast("§6§l[수호자] §f전투가 끝났다! §7무릎을 꿇었다.");
-        if (level() instanceof ServerLevel sl)
+        broadcast("§6§l[수호자] §f전투가 끝났다! §7무를을 꿇었다.");
+        if (level() instanceof ServerLevel sl) {
             DungeonGimmickHandler.onBossDefeated(sl, blockPosition());
+            if (src.getEntity() instanceof ServerPlayer killer)
+                DungeonDropTable.onBossDrop(killer, sl);
+        }
         super.die(src);
     }
 
     private void handleSkills() {
-        if (spawnTick > 0) {
-            spawnTick--;
-            return;
-        }
-        if (currentAnim == AnimState.SPAWN) {
-            currentAnim = AnimState.IDLE;
-        }
+        if (spawnTick > 0) { spawnTick--; return; }
+        if (currentAnim == AnimState.SPAWN) currentAnim = AnimState.IDLE;
 
         if (--fireballTick <= 0) {
             fireballTick = (phase == 2 ? FIREBALL_CD_P2 : FIREBALL_CD_P1);
@@ -205,13 +201,11 @@ public class DungeonGuardianEntity extends Monster implements GeoEntity {
         }
 
         if (guardActive) {
-            if (--guardDuration <= 0) {
-                guardActive = false;
-            }
+            if (--guardDuration <= 0) guardActive = false;
         } else {
             if (--guardTick <= 0) {
                 int baseCD = (phase == 2 ? GUARD_CD_P2 : GUARD_CD_P1);
-                guardTick = baseCD + (int)((Math.random() * 2 - 1) * GUARD_VARIANCE);
+                guardTick = baseCD + (int)((Math.random()*2-1)*GUARD_VARIANCE);
                 guardWarned = false;
                 activateGuard();
             } else if (!guardWarned && guardTick == GUARD_WARN_TICKS) {
@@ -225,14 +219,12 @@ public class DungeonGuardianEntity extends Monster implements GeoEntity {
                 stalagtiteTick = STALAGTITE_CD / 2;
                 doStalagmiteDrop();
             }
-        }
-
-        if (phase == 2 && --roarTick <= 0) {
-            roarTick = ROAR_CD_P2;
-            doRoar();
+            if (--roarTick <= 0) {
+                roarTick = ROAR_CD_P2;
+                doRoar();
+            }
         }
     }
-
     private void doFireball() {
         playAnim(AnimState.FIREBALL);
         playSound(SoundEvents.BLAZE_SHOOT, 2f, 0.7f);
@@ -240,217 +232,137 @@ public class DungeonGuardianEntity extends Monster implements GeoEntity {
         LivingEntity target = getTarget();
 
         double tx = target.getX() - getX();
-        double ty = target.getEyeY() - getEyeY();
+        double ty = (target.getY() + target.getBbHeight()/2) - (getY() + getBbHeight()/2);
         double tz = target.getZ() - getZ();
         double len = Math.sqrt(tx*tx + ty*ty + tz*tz);
-        if (len < 0.1) return;
+        if (len < 0.001) return;
         double nx = tx/len, ny = ty/len, nz = tz/len;
 
-        // 보스 입 앞 5블록 기준, 가운데 제거 -> 좌우 2발
-        double baseX = getX() + nx * 5.0;
-        double baseY = getEyeY();
-        double baseZ = getZ() + nz * 5.0;
+        double bx = getX();
+        double by = getY() + getBbHeight()/2;
+        double bz = getZ();
 
-        for (int i : new int[]{-1, 1}) {
-            double sideX = -nz * i * 1.2;
-            double sideZ =  nx * i * 1.2;
-
-            double fx = baseX + sideX;
-            double fz = baseZ + sideZ;
-
-            // 각 화염구가 플레이어를 정확히 향하도록 방향 재계산
-            double atx = target.getX() - fx;
-            double aty = target.getEyeY() - baseY;
-            double atz = target.getZ() - fz;
-            double alen = Math.sqrt(atx*atx + aty*aty + atz*atz);
-            if (alen < 0.1) continue;
-            double power = 0.5;
-            double px = atx/alen * power;
-            double py = aty/alen * power;
-            double pz = atz/alen * power;
-
-            // SmallFireball을 시각용으로 스폰, 자체 AI/충돌은 비활성화
-            var fb = EntityType.SMALL_FIREBALL.create(sl, null,
-                    BlockPos.containing(fx, baseY, fz),
-                    EntitySpawnReason.MOB_SUMMONED, false, false);
-            if (fb != null) {
-                fb.setOwner(this);
-                fb.setPos(fx, baseY, fz);
-                fb.setDeltaMovement(0, 0, 0); // 직접 이동 제어
-                fb.setNoGravity(true);
-                sl.addFreshEntity(fb);
-                // Map: entityId → [dx,dy,dz,age]
-                trackedFireballs.put(fb.getId(),
-                    new double[]{px, py, pz, 0});
+        // 1페이즈: 단일 화염구, 2페이즈: 3방향 동시
+        int shots = (phase == 2) ? 3 : 1;
+        for (int i = 0; i < shots; i++) {
+            double spreadX = nx, spreadZ = nz;
+            if (shots > 1) {
+                double angle = Math.toRadians(-20 + i * 20);
+                spreadX = nx * Math.cos(angle) - nz * Math.sin(angle);
+                spreadZ = nx * Math.sin(angle) + nz * Math.cos(angle);
             }
-        }
-    }
-
-    private void activateGuard() {
-        guardActive = true;
-        guardDuration = GUARD_DURATION;
-        playSound(SoundEvents.IRON_GOLEM_STEP, 1.5f, 0.5f);
-        broadcast("§8[수호자] §7몸을 굳혔다... §c[가드]");
-    }
-
-    private void doStalagmiteDrop() {
-        if (!(level() instanceof ServerLevel sl)) return;
-
-        List<Player> players = level().getEntitiesOfClass(Player.class,
-                new AABB(blockPosition()).inflate(20));
-        if (players.isEmpty()) return;
-
-        Player target = players.get(sl.getRandom().nextInt(players.size()));
-
-        broadcast("§8[수호자] §7천장이 흔들린다..!");
-        playSound(SoundEvents.STONE_BREAK, 2f, 0.5f);
-
-        double fy      = DungeonManager.DUNGEON_Y + 14 - 2;
-        double floorY  = DungeonManager.DUNGEON_Y + 1.0;
-
-        for (int ddx = -1; ddx <= 1; ddx++) {
-            for (int ddz = -1; ddz <= 1; ddz++) {
-                double fx = target.getX() + ddx;
-                double fz = target.getZ() + ddz;
-
-                BlockPos spawnPos = BlockPos.containing(fx, fy, fz);
-                FallingBlockEntity falling = FallingBlockEntity.fall(
-                        sl, spawnPos,
-                        Blocks.POINTED_DRIPSTONE.defaultBlockState()
-                                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN)
-                );
-                falling.dropItem = false;
-                falling.setPos(fx, fy, fz);
-                fallingDripstones.put(falling.getId(), new double[]{floorY, fx, fz});
-            }
+            net.minecraft.world.entity.projectile.SmallFireball fb =
+                new net.minecraft.world.entity.projectile.SmallFireball(sl, this, new net.minecraft.world.phys.Vec3(spreadX, ny, spreadZ));
+            fb.setPos(bx, by, bz);
+            fb.setPower(spreadX * 0.2, ny * 0.2, spreadZ * 0.2);
+            sl.addFreshEntity(fb);
+            int fbId = fb.getId();
+            trackedFireballs.put(fbId, new double[]{bx, by, bz, spreadX, ny, spreadZ, 60});
         }
     }
 
     private void tickFireballs() {
-        if (!(level() instanceof ServerLevel sl)) return;
-        if (trackedFireballs.isEmpty()) return;
-
-        final double SPEED   = 0.5;  // 블록/틱
-        final int    MAX_AGE = 100;  // 최대 수명(틱)
-        final double HIT_R   = 0.8;  // 충돌 판정 (플레이어 크기 기준)
-        final float  DAMAGE  = 20.0f;
-
-        Iterator<Map.Entry<Integer, double[]>> it = trackedFireballs.entrySet().iterator();
+        Iterator<Map.Entry<Integer,double[]>> it = trackedFireballs.entrySet().iterator();
         while (it.hasNext()) {
-            var entry = it.next();
-            int id = entry.getKey();
-            double[] d = entry.getValue(); // [dx,dy,dz,age]
-            d[3]++;
+            Map.Entry<Integer,double[]> e = it.next();
+            double[] d = e.getValue();
+            d[6]--;
+            if (d[6] <= 0) it.remove();
+        }
+    }
 
-            net.minecraft.world.entity.Entity fb = sl.getEntity(id);
+    private void activateGuard() {
+        guardActive   = true;
+        guardDuration = GUARD_DURATION;
+        broadcast("§8[수호자] §7투명한 방어막이 활성화된다!");
+        playSound(SoundEvents.IRON_GOLEM_REPAIR, 1.5f, 0.6f);
+        if (level() instanceof ServerLevel sl) {
+            AABB area = getBoundingBox().inflate(20);
+            for (Player p : sl.getEntitiesOfClass(Player.class, area))
+                p.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, GUARD_DURATION + 20, 1, false, true));
+        }
+    }
 
-            // 엔티티 소멸 or 수명 초과
-            if (fb == null || !fb.isAlive() || d[3] > MAX_AGE) {
-                if (fb != null && fb.isAlive()) {
-                    spawnExplosionEffect(sl, fb.getX(), fb.getY(), fb.getZ());
-                    fb.discard();
+    private void doStalagmiteDrop() {
+        if (!(level() instanceof ServerLevel sl)) return;
+        Player target = level().getNearestPlayer(this, 30);
+        if (target == null) return;
+
+        broadcast("§8[수호자] §7낙하하는 돌..!");
+        for (int i = 0; i < (phase == 2 ? 5 : 3); i++) {
+            double ox = (Math.random() - 0.5) * 10;
+            double oz = (Math.random() - 0.5) * 10;
+            double dropX = target.getX() + ox;
+            double dropZ = target.getZ() + oz;
+            double dropY = target.getY() + 15;
+
+            BlockPos dropPos = new BlockPos((int)dropX, (int)dropY, (int)dropZ);
+            sl.setBlock(dropPos, Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN), 3);
+
+            FallingBlockEntity falling = FallingBlockEntity.fall(sl, dropPos,
+                Blocks.POINTED_DRIPSTONE.defaultBlockState()
+                    .setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN));
+            falling.dropItem = false;
+            falling.setHurtsEntities(8.0f, 40);
+            sl.addFreshEntity(falling);
+            fallingDripstones.put(falling.getId(), new double[]{dropX, dropY, dropZ, 100});
+        }
+    }
+
+    private void tickFallingDripstones() {
+        Iterator<Map.Entry<Integer,double[]>> it = fallingDripstones.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Integer,double[]> e = it.next();
+            double[] d = e.getValue();
+            d[3]--;
+            if (d[3] <= 0) {
+                if (level() instanceof ServerLevel sl) {
+                    net.minecraft.world.entity.Entity ent = sl.getEntity(e.getKey());
+                    if (ent != null) ent.remove(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
                 }
-                it.remove();
-                continue;
-            }
-
-            // 엔티티 직접 이동 (속도 고정)
-            double nx = fb.getX() + d[0];
-            double ny = fb.getY() + d[1];
-            double nz = fb.getZ() + d[2];
-            fb.setPos(nx, ny, nz);
-
-            // 블록 충돌 체크
-            BlockPos bp = BlockPos.containing(nx, ny, nz);
-            if (!sl.getBlockState(bp).isAir()) {
-                spawnExplosionEffect(sl, nx, ny, nz);
-                fb.discard();
-                it.remove();
-                continue;
-            }
-
-            // 플레이어 충돌 체크 (엔티티 실제 위치 기준 → 피하기 가능)
-            AABB box = new AABB(nx-HIT_R, ny-HIT_R, nz-HIT_R,
-                                nx+HIT_R, ny+HIT_R, nz+HIT_R);
-            boolean hit = false;
-            for (Player p : sl.getEntitiesOfClass(Player.class, box)) {
-                p.hurt(sl.damageSources().fireball(null, this), DAMAGE);
-                hit = true;
-                break;
-            }
-            if (hit) {
-                spawnExplosionEffect(sl, nx, ny, nz);
-                fb.discard();
                 it.remove();
             }
         }
     }
 
-    private void spawnExplosionEffect(ServerLevel sl, double x, double y, double z) {
-        // 블록 파괴 없이 폭발 효과만 (NONE = 블록 파괴 안 함)
-        sl.explode(null, x, y, z, 3.0f, false,
-            net.minecraft.world.level.Level.ExplosionInteraction.NONE);
-    }
-
-        private void tickFallingDripstones() {
+    private void doRoar() {
+        playAnim(AnimState.ROAR);
+        playSound(SoundEvents.RAVAGER_ROAR, 2.0f, 0.5f);
+        broadcast("§4[수호자] §c대지가 떨린다!!");
         if (!(level() instanceof ServerLevel sl)) return;
-        if (fallingDripstones.isEmpty()) return;
-
-        Iterator<Map.Entry<Integer, double[]>> it = fallingDripstones.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<Integer, double[]> entry = it.next();
-            net.minecraft.world.entity.Entity e = sl.getEntity(entry.getKey());
-            double[] data = entry.getValue();
-
-            boolean arrived = (e == null || e.getY() <= data[0] + 1.5);
-            if (arrived) {
-                double impactX = data[1];
-                double impactZ = data[2];
-                for (Player p : sl.getEntitiesOfClass(Player.class,
-                        new AABB(impactX - 1.2, data[0] - 0.5, impactZ - 1.2,
-                                 impactX + 1.2, data[0] + 3.0, impactZ + 1.2))) {
-                    p.hurt(sl.damageSources().stalagmite(), 12.0f);
-                }
-                if (e != null) e.discard();
-                it.remove();
-            }
+        AABB area = getBoundingBox().inflate(15);
+        for (Player p : sl.getEntitiesOfClass(Player.class, area)) {
+            double dx = p.getX() - getX();
+            double dz = p.getZ() - getZ();
+            double len = Math.sqrt(dx*dx + dz*dz);
+            if (len > 0) p.push(dx/len * 2.5, 0.6, dz/len * 2.5);
+            p.addEffect(new MobEffectInstance(MobEffects.CONFUSION, 60, 0, false, true));
         }
     }
 
     private void activatePhase2() {
         stalagtiteTick = STALAGTITE_CD / 2;
         playAnim(AnimState.PHASE2);
-        playSound(SoundEvents.WITHER_AMBIENT, 2f, 0.5f);
-        getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(20.0);
-        getAttribute(Attributes.ARMOR).setBaseValue(8.0);
-        AABB area = new AABB(blockPosition()).inflate(20);
-        for (var p : level().getEntitiesOfClass(Player.class, area)) {
-            p.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 200, 1));
-            p.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, 60, 0));
+        broadcast("§4§l[수호자] §c나를... 감히 여기까지..?!");
+        playSound(SoundEvents.WITHER_SHOOT, 2.0f, 0.5f);
+        this.addEffect(new MobEffectInstance(MobEffects.SPEED, Integer.MAX_VALUE, 1, false, false));
+        if (level() instanceof ServerLevel sl) {
+            AABB area = getBoundingBox().inflate(20);
+            for (Player p : sl.getEntitiesOfClass(Player.class, area))
+                p.displayClientMessage(Component.literal("§4§l[수호자] 2페이즈 진입!"), false);
         }
-        broadcast("§c§l[수호자] §f임계점을 넘었다! §c전투 개시!");
-    }
-
-    private void doRoar() {
-        playAnim(AnimState.ROAR);
-        playSound(SoundEvents.ELDER_GUARDIAN_CURSE, 2f, 0.6f);
-        AABB area = new AABB(blockPosition()).inflate(15);
-        for (var p : level().getEntitiesOfClass(Player.class, area)) {
-            p.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 80, 1));
-            double nx = getX()-p.getX(), nz = getZ()-p.getZ();
-            double l = Math.sqrt(nx*nx+nz*nz);
-            if (l > 0) p.setDeltaMovement(-nx/l*1.5, 0.4, -nz/l*1.5);
-        }
-        broadcast("§4[수호자] §c대지가 흔들린다!");
     }
 
     private void broadcast(String msg) {
-        AABB area = new AABB(blockPosition()).inflate(60);
-        for (var p : level().getEntitiesOfClass(Player.class, area))
-            if (p instanceof ServerPlayer sp)
-                sp.displayClientMessage(Component.literal(msg), false);
+        if (!(level() instanceof ServerLevel sl)) return;
+        AABB area = getBoundingBox().inflate(60);
+        for (Player p : sl.getEntitiesOfClass(Player.class, area))
+            p.displayClientMessage(Component.literal(msg), false);
     }
 
-    public boolean isFireballAnim()      { return currentAnim == AnimState.FIREBALL; }
-    public float   getFireballProgress() { return 0f; }
+    @Override protected net.minecraft.sounds.SoundEvent getAmbientSound() { return null; }
+    @Override protected net.minecraft.sounds.SoundEvent getHurtSound(DamageSource s) { return SoundEvents.IRON_GOLEM_HURT; }
+    @Override protected net.minecraft.sounds.SoundEvent getDeathSound() { return SoundEvents.WITHER_DEATH; }
+    @Override protected float getSoundVolume() { return 2.0f; }
 }
