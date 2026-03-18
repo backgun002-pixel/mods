@@ -2,6 +2,7 @@ package com.example.cosmod;
 
 import com.example.cosmod.combat.CombatItems;
 import com.example.cosmod.combat.SetBonusHandler;
+import com.example.cosmod.stat.StatSyncHandler;
 import com.example.cosmod.job.JobNpcNetwork;
 import com.example.cosmod.job.JobExpHandler;
 import com.example.cosmod.job.PlayerJobManager;
@@ -17,6 +18,7 @@ import com.example.cosmod.storage.StorageNpcNetwork;
 import com.example.cosmod.storage.DeathEventHandler;
 import com.example.cosmod.codex.CodexNetwork;
 import com.example.cosmod.weapon.CosmodWeapons;
+import com.example.cosmod.weapon.WeaponSkillItem;
 import com.example.cosmod.weapon.WeaponSkillManager;
 import com.example.cosmod.weapon.WeaponAttackHandler;
 import com.example.cosmod.weapon.WeaponCooldownPayload;
@@ -56,6 +58,7 @@ public class CosmodMod implements ModInitializer {
         CosmodEconomyItems.register();
         CombatItems.register();
         SetBonusHandler.register();
+        StatSyncHandler.register();
         JobNpcNetwork.register();
         JobExpHandler.register();
         // Attachment 타입 등록 (클래스 로딩 시 자동 등록됨)
@@ -66,7 +69,6 @@ public class CosmodMod implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(SkillJobSyncPayload.TYPE, SkillJobSyncPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(JobExpSyncPayload.TYPE, JobExpSyncPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SkillUnlockPayload.TYPE, SkillUnlockPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(com.example.cosmod.skill.SkillScreenEffectPayload.TYPE, com.example.cosmod.skill.SkillScreenEffectPayload.CODEC);
         StorageNpcNetwork.register();
         SkillHandler.register();
         JobCheatCommand.register();
@@ -84,6 +86,7 @@ public class CosmodMod implements ModInitializer {
         ShopRegistry.init();
         ShopServerNetwork.register();
         EnhanceTableNetwork.registerServer();
+        GemRerollNetwork.registerServer();
         registerCreativeTab();
         LOGGER.info("[Cosmod] 초기화 완료!");
     }
@@ -121,17 +124,13 @@ public class CosmodMod implements ModInitializer {
                 output.accept(GearItem.createWithOptions(CombatItems.GREATSWORD));
                 output.accept(GearItem.createWithOptions(CombatItems.SHORTBOW));
                 output.accept(GearItem.createWithOptions(CombatItems.LONGBOW));
-                // 방어구 세트A
-                output.accept(GearItem.createWithOptions(CombatItems.IRON_HELMET));
-                output.accept(GearItem.createWithOptions(CombatItems.IRON_CHESTPLATE));
-                output.accept(GearItem.createWithOptions(CombatItems.IRON_LEGGINGS));
-                output.accept(GearItem.createWithOptions(CombatItems.IRON_BOOTS));
-                // 방어구 세트B
-                output.accept(GearItem.createWithOptions(CombatItems.DARK_HELMET));
-                output.accept(GearItem.createWithOptions(CombatItems.DARK_CHESTPLATE));
-                output.accept(GearItem.createWithOptions(CombatItems.DARK_LEGGINGS));
-                output.accept(GearItem.createWithOptions(CombatItems.DARK_BOOTS));
-                // JSH 세트
+                // 스킬 무기
+                output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.FROST_BLADE));
+                output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.FLAME_SWORD));
+                output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.THUNDER_BLADE));
+                output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.LAVA_MAUL));
+                output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.WIND_REAPER));
+                // JSH 세트 (= 철 세트)
                 output.accept(GearItem.createWithOptions(CombatItems.JSH_HELMET));
                 output.accept(GearItem.createWithOptions(CombatItems.JSH_CHESTPLATE));
                 output.accept(GearItem.createWithOptions(CombatItems.JSH_LEGGINGS));
@@ -151,7 +150,12 @@ public class CosmodMod implements ModInitializer {
                 output.accept(CombatItems.ARMOR_BOX);
                 // 강화대 + 강화석
                 output.accept(new ItemStack(CombatItems.ENHANCE_TABLE));
-                output.accept(CombatItems.ENHANCE_STONE);
+                output.accept(CombatItems.ENHANCE_STONE_BASIC);
+                output.accept(CombatItems.ENHANCE_STONE_MID);
+                output.accept(CombatItems.ENHANCE_STONE_HIGH);
+                output.accept(CombatItems.GEM_BASIC);
+                output.accept(CombatItems.GEM_MID);
+                output.accept(CombatItems.GEM_HIGH);
                 // 보석
                 output.accept(CosmodItems.RUBY);
                 output.accept(CosmodItems.SAPPHIRE);
