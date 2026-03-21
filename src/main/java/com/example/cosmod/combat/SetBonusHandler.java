@@ -18,26 +18,21 @@ import net.minecraft.world.item.ItemStack;
 
 public class SetBonusHandler {
 
-    private static Identifier id(String key) {
-        return Identifier.fromNamespaceAndPath("cosmod", key);
-    }
+    private static Identifier id(String key) { return Identifier.fromNamespaceAndPath("cosmod", key); }
+    private static Identifier atkId(String key) { return id("set_atk_" + key.toLowerCase()); }
+    private static Identifier defId(String key) { return id("set_def_" + key.toLowerCase()); }
+    private static Identifier spdId(String key) { return id("set_spd_" + key.toLowerCase()); }
 
-    private static Identifier atkId(String key)  { return id("set_atk_"  + key.toLowerCase()); }
-    private static Identifier defId(String key)  { return id("set_def_"  + key.toLowerCase()); }
-    private static Identifier spdId(String key)  { return id("set_spd_"  + key.toLowerCase()); }
-
-    private static final Identifier JOB_ATK  = id("job_atk");
-    private static final Identifier JOB_DEF  = id("job_def");
-    private static final Identifier JOB_SPD  = id("job_spd");
-
-    private static final Identifier GEAR_ATK        = id("gear_atk");
-    private static final Identifier GEAR_ATK_PCT    = id("gear_atk_pct");
-    private static final Identifier GEAR_DEF        = id("gear_def");
-    private static final Identifier GEAR_HP         = id("gear_hp");
-    private static final Identifier GEAR_SPD        = id("gear_spd");
-    private static final Identifier GEAR_CRIT       = id("gear_crit");
-    private static final Identifier GEAR_JUMP       = id("gear_jump");
-    private static final Identifier GEAR_CRITDMG    = id("gear_critdmg");
+    private static final Identifier JOB_ATK = id("job_atk");
+    private static final Identifier JOB_DEF = id("job_def");
+    private static final Identifier JOB_SPD = id("job_spd");
+    private static final Identifier GEAR_ATK     = id("gear_atk");
+    private static final Identifier GEAR_ATK_PCT = id("gear_atk_pct");
+    private static final Identifier GEAR_DEF     = id("gear_def");
+    private static final Identifier GEAR_HP      = id("gear_hp");
+    private static final Identifier GEAR_SPD     = id("gear_spd");
+    private static final Identifier GEAR_JUMP    = id("gear_jump");
+    private static final Identifier GEAR_CRITDMG = id("gear_critdmg");
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -83,9 +78,10 @@ public class SetBonusHandler {
     private static void applyJobBonuses(ServerPlayer player) {
         PlayerJobData data = PlayerJobManager.get(player);
         JobClass combat = data.getCombatJob();
-        removeModifier(player, Attributes.ATTACK_DAMAGE,    JOB_ATK);
-        removeModifier(player, Attributes.ARMOR,            JOB_DEF);
-        removeModifier(player, Attributes.MOVEMENT_SPEED,   JOB_SPD);
+        removeModifier(player, Attributes.ATTACK_DAMAGE,  JOB_ATK);
+        removeModifier(player, Attributes.ARMOR,          JOB_DEF);
+        removeModifier(player, Attributes.MOVEMENT_SPEED, JOB_SPD);
+        removeModifier(player, Attributes.MAX_HEALTH,     JOB_DEF);
         if (combat == null) return;
         int lv = data.getLevel(combat);
         switch (combat) {
@@ -114,28 +110,25 @@ public class SetBonusHandler {
         removeModifier(player, Attributes.MAX_HEALTH,     GEAR_HP);
         removeModifier(player, Attributes.MOVEMENT_SPEED, GEAR_SPD);
         removeModifier(player, Attributes.JUMP_STRENGTH,  GEAR_JUMP);
-        double totalAtkFlat = 0, totalAtkPct = 0, totalDef = 0;
-        double totalHp = 0, totalSpd = 0, totalJump = 0;
+        double totalAtkFlat=0,totalAtkPct=0,totalDef=0,totalHp=0,totalSpd=0,totalJump=0;
         ItemStack mainHand = player.getMainHandItem();
         if (mainHand.getItem() instanceof GearItem) {
             GearStats s = readGearStats(mainHand);
-            totalAtkFlat += s.atkFlat; totalAtkPct += s.atkPct; totalDef += s.def;
-            totalHp += s.hp; totalSpd += s.spd; totalJump += s.jump;
+            totalAtkFlat+=s.atkFlat; totalAtkPct+=s.atkPct; totalDef+=s.def; totalHp+=s.hp; totalSpd+=s.spd; totalJump+=s.jump;
         }
-        for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+        for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD,EquipmentSlot.CHEST,EquipmentSlot.LEGS,EquipmentSlot.FEET}) {
             ItemStack armor = player.getItemBySlot(slot);
             if (armor.getItem() instanceof GearItem) {
                 GearStats s = readGearStats(armor);
-                totalAtkFlat += s.atkFlat; totalAtkPct += s.atkPct; totalDef += s.def;
-                totalHp += s.hp; totalSpd += s.spd; totalJump += s.jump;
+                totalAtkFlat+=s.atkFlat; totalAtkPct+=s.atkPct; totalDef+=s.def; totalHp+=s.hp; totalSpd+=s.spd; totalJump+=s.jump;
             }
         }
         if (totalAtkFlat != 0) addFlat(player, Attributes.ATTACK_DAMAGE, GEAR_ATK, totalAtkFlat);
-        if (totalAtkPct != 0)  addMultiplier(player, Attributes.ATTACK_DAMAGE, GEAR_ATK_PCT, totalAtkPct / 100.0);
-        if (totalDef != 0)     addFlat(player, Attributes.ARMOR, GEAR_DEF, totalDef);
-        if (totalHp != 0)      addFlat(player, Attributes.MAX_HEALTH, GEAR_HP, totalHp);
-        if (totalSpd != 0)     addMultiplier(player, Attributes.MOVEMENT_SPEED, GEAR_SPD, totalSpd / 100.0);
-        if (totalJump != 0)    addFlat(player, Attributes.JUMP_STRENGTH, GEAR_JUMP, totalJump * 0.05);
+        if (totalAtkPct  != 0) addMultiplier(player, Attributes.ATTACK_DAMAGE, GEAR_ATK_PCT, totalAtkPct/100.0);
+        if (totalDef     != 0) addFlat(player, Attributes.ARMOR, GEAR_DEF, totalDef);
+        if (totalHp      != 0) addFlat(player, Attributes.MAX_HEALTH, GEAR_HP, totalHp);
+        if (totalSpd     != 0) addMultiplier(player, Attributes.MOVEMENT_SPEED, GEAR_SPD, totalSpd/100.0);
+        if (totalJump    != 0) addFlat(player, Attributes.JUMP_STRENGTH, GEAR_JUMP, totalJump*0.05);
     }
 
     private static GearStats readGearStats(ItemStack stack) {
@@ -162,29 +155,43 @@ public class SetBonusHandler {
 
     private static void applyToStats(GearStats stats, GearOption opt, int val) {
         switch (opt) {
-            case BONUS_ATK -> stats.atkFlat += val;
-            case DEFENSE   -> stats.def     += val;
-            case BONUS_DEF -> stats.def     += val;
-            case MAX_HP    -> stats.hp      += val;
-            case BONUS_HP  -> stats.hp      += val;
-            case MOVE_SPEED -> stats.spd    += val;
-            case JUMP_BOOST -> stats.jump   += val;
+            case BONUS_ATK  -> stats.atkFlat += val;
+            case DEFENSE    -> stats.def     += val;
+            case BONUS_DEF  -> stats.def     += val;
+            case MAX_HP     -> stats.hp      += val;
+            case BONUS_HP   -> stats.hp      += val;
+            case MOVE_SPEED -> stats.spd     += val;
+            case JUMP_BOOST -> stats.jump    += val;
             default -> {}
         }
     }
 
     private static class GearStats { double atkFlat=0,atkPct=0,def=0,hp=0,spd=0,jump=0; }
 
-    private static void removeModifier(ServerPlayer player, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr, Identifier id) {
+    private static void removeModifier(ServerPlayer player,
+            net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr, Identifier id) {
         AttributeInstance inst = player.getAttribute(attr);
         if (inst != null) inst.removeModifier(id);
     }
-    private static void addFlat(ServerPlayer player, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr, Identifier id, double value) {
+
+    // 중복 방지: 항상 removeModifier 후 addTransientModifier
+    private static void addFlat(ServerPlayer player,
+            net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr,
+            Identifier id, double value) {
         AttributeInstance inst = player.getAttribute(attr);
-        if (inst != null) inst.addTransientModifier(new AttributeModifier(id, value, AttributeModifier.Operation.ADD_VALUE));
+        if (inst != null) {
+            inst.removeModifier(id);
+            inst.addTransientModifier(new AttributeModifier(id, value, AttributeModifier.Operation.ADD_VALUE));
+        }
     }
-    private static void addMultiplier(ServerPlayer player, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr, Identifier id, double value) {
+
+    private static void addMultiplier(ServerPlayer player,
+            net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr,
+            Identifier id, double value) {
         AttributeInstance inst = player.getAttribute(attr);
-        if (inst != null) inst.addTransientModifier(new AttributeModifier(id, value, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
+        if (inst != null) {
+            inst.removeModifier(id);
+            inst.addTransientModifier(new AttributeModifier(id, value, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
+        }
     }
 }
