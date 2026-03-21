@@ -22,37 +22,22 @@ public class EnhanceTableNetwork {
             (payload, ctx) -> ctx.server().execute(() -> {
                 ServerPlayer player = ctx.player();
                 var inv = player.getInventory();
-
                 int gearIdx  = payload.gearSlotIdx();
                 int stoneIdx = payload.stoneSlotIdx();
                 int stoneType = payload.stoneType();
-
                 ItemStack gear  = inv.getItem(gearIdx);
                 ItemStack stone = inv.getItem(stoneIdx);
-
                 if (gear.isEmpty() || !(gear.getItem() instanceof GearItem)) {
-                    msg(player, "§c강화 가능한 장비가 아닙니다.");
-                    return;
+                    msg(player, "§c강화 가능한 장비가 아닙니다."); return;
                 }
                 if (stone.isEmpty()) {
-                    msg(player, "§c강화석 또는 보석이 없습니다.");
-                    return;
+                    msg(player, "§c강화석 또는 보석이 없습니다."); return;
                 }
-
                 if (stoneType == 3) {
-                    if (!(stone.getItem() instanceof GemItem gi)) {
-                        msg(player, "§c보석 아이템이 아닙니다.");
-                        return;
-                    }
-                    if (!GemItem.isIdentified(stone)) {
-                        msg(player, "§c감정되지 않은 보석입니다. 먼저 우클릭으로 감정하세요.");
-                        return;
-                    }
+                    if (!(stone.getItem() instanceof GemItem gi)) { msg(player, "§c보석 아이템이 아닙니다."); return; }
+                    if (!GemItem.isIdentified(stone)) { msg(player, "§c감정되지 않은 보석입니다. 먼저 우클릭으로 감정하세요."); return; }
                     var gearTag = GearItem.getGearTag(gear);
-                    if (gearTag.contains("enhanced") && gearTag.getBoolean("enhanced").orElse(false)) {
-                        msg(player, "§c이미 보석이 장착된 장비입니다.");
-                        return;
-                    }
+                    if (gearTag.contains("enhanced") && gearTag.getBoolean("enhanced").orElse(false)) { msg(player, "§c이미 보석이 장착된 장비입니다."); return; }
                     net.minecraft.nbt.CompoundTag gemTag = GemItem.getGemTag(stone);
                     int lines = gi.getTier().optionLines;
                     for (int ii = 0; ii < lines; ii++) {
@@ -68,31 +53,25 @@ public class EnhanceTableNetwork {
                     stone.shrink(1);
                     inv.setItem(stoneIdx, stone);
                     inv.setItem(gearIdx, gear);
-                    msg(player, "§b✦ 보석 장착 성공!");
+                    ServerPlayNetworking.send(player, new EnhanceResultPayload("§b✦ 보석 장착 성공!", 0x55CCFF, false, gearIdx, gear.copy()));
                     return;
                 }
-
                 int beforeLevel = GearItem.getEnhanceLevel(gear);
                 stone.shrink(1);
                 inv.setItem(stoneIdx, stone);
                 GearItem.EnhanceResult result = GearItem.enhance(gear, stoneType);
                 inv.setItem(gearIdx, gear);
-
                 int afterLevel = GearItem.getEnhanceLevel(gear);
                 switch (result) {
                     case SUCCESS -> {
                         boolean special = afterLevel >= 7;
-                        String msg = special
-                            ? "★ 강화 성공! +" + afterLevel + " ★"
-                            : "✦ 강화 성공!  +" + beforeLevel + " → +" + afterLevel;
+                        String msg = special ? "★ 강화 성공! +" + afterLevel + " ★" : "✦ 강화 성공!  +" + beforeLevel + " → +" + afterLevel;
                         int color = special ? 0xFFD700 : 0x55FF55;
-                        ServerPlayNetworking.send(player, new EnhanceResultPayload(msg, color, special));
+                        ServerPlayNetworking.send(player, new EnhanceResultPayload(msg, color, special, gearIdx, gear.copy()));
                     }
                     case FAIL -> {
-                        String msg2 = (afterLevel < beforeLevel)
-                            ? "✗ 강화 실패.  +" + beforeLevel + " → +" + afterLevel
-                            : "✗ 강화 실패.  현재 +" + afterLevel;
-                        ServerPlayNetworking.send(player, new EnhanceResultPayload(msg2, 0xFF5555, false));
+                        String msg2 = (afterLevel < beforeLevel) ? "✗ 강화 실패.  +" + beforeLevel + " → +" + afterLevel : "✗ 강화 실패.  현재 +" + afterLevel;
+                        ServerPlayNetworking.send(player, new EnhanceResultPayload(msg2, 0xFF5555, false, gearIdx, gear.copy()));
                     }
                 }
             }));
