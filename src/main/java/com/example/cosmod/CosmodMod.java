@@ -26,6 +26,7 @@ import com.example.cosmod.weapon.impl.FlameKingSwordManager;
 import com.example.cosmod.codex.CodexRegistry;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import com.example.cosmod.combat.EnhanceTableNetwork;
+import com.example.cosmod.combat.GemRerollNetwork;
 import com.example.cosmod.combat.GearItem;
 import com.example.cosmod.crop.CosmodCrops;
 import com.example.cosmod.network.CosmeticSyncNetwork;
@@ -61,7 +62,6 @@ public class CosmodMod implements ModInitializer {
         StatSyncHandler.register();
         JobNpcNetwork.register();
         JobExpHandler.register();
-        // Attachment 타입 등록 (클래스 로딩 시 자동 등록됨)
         var _att = CosmodAttachments.JOB_DATA;
         PlayerJobManager.registerEvents();
         DungeonItems.register();
@@ -86,6 +86,7 @@ public class CosmodMod implements ModInitializer {
         ShopRegistry.init();
         ShopServerNetwork.register();
         EnhanceTableNetwork.registerServer();
+        GemRerollNetwork.registerServer();
         registerCreativeTab();
         LOGGER.info("[Cosmod] 초기화 완료!");
     }
@@ -95,19 +96,15 @@ public class CosmodMod implements ModInitializer {
             Registries.CREATIVE_MODE_TAB,
             Identifier.fromNamespaceAndPath(MOD_ID, "cosmod_tab")
         );
-
         CreativeModeTab tab = FabricItemGroup.builder()
             .title(Component.literal("Cosmod"))
             .icon(() -> new ItemStack(CosmodEconomyItems.COSMO_COIN))
             .displayItems((params, output) -> {
-                // 코디 아이템
                 output.accept(CosmodItems.COSME_HAT);
                 output.accept(CosmodItems.COSME_SHIRT);
                 output.accept(CosmodItems.COSME_PANTS);
                 output.accept(CosmodItems.COSME_SHOES);
-                // 코인
                 output.accept(CosmodEconomyItems.COSMO_COIN);
-                // 작물
                 output.accept(CosmodCrops.TOMATO);
                 output.accept(CosmodCrops.PEPPER);
                 output.accept(CosmodCrops.CORN);
@@ -117,48 +114,43 @@ public class CosmodMod implements ModInitializer {
                 output.accept(new ItemStack(CosmodCrops.FERTILE_SOIL));
                 output.accept(new ItemStack(CosmodCrops.SPRINKLER));
                 output.accept(CosmodCrops.WATERING_CAN);
-                // 무기 (랜덤 옵션 포함)
                 output.accept(GearItem.createWithOptions(CombatItems.DAGGER));
                 output.accept(GearItem.createWithOptions(CombatItems.SWORD));
                 output.accept(GearItem.createWithOptions(CombatItems.GREATSWORD));
                 output.accept(GearItem.createWithOptions(CombatItems.SHORTBOW));
                 output.accept(GearItem.createWithOptions(CombatItems.LONGBOW));
-                // 스킬 무기
                 output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.FROST_BLADE));
                 output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.FLAME_SWORD));
                 output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.THUNDER_BLADE));
                 output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.LAVA_MAUL));
                 output.accept(new net.minecraft.world.item.ItemStack(CosmodWeapons.WIND_REAPER));
-                // JSH 세트 (= 철 세트)
                 output.accept(GearItem.createWithOptions(CombatItems.JSH_HELMET));
                 output.accept(GearItem.createWithOptions(CombatItems.JSH_CHESTPLATE));
                 output.accept(GearItem.createWithOptions(CombatItems.JSH_LEGGINGS));
                 output.accept(GearItem.createWithOptions(CombatItems.JSH_BOOTS));
-                // PJH 세트
                 output.accept(GearItem.createWithOptions(CombatItems.PJH_HELMET));
                 output.accept(GearItem.createWithOptions(CombatItems.PJH_CHESTPLATE));
                 output.accept(GearItem.createWithOptions(CombatItems.PJH_LEGGINGS));
                 output.accept(GearItem.createWithOptions(CombatItems.PJH_BOOTS));
-                // YYJ 세트
                 output.accept(GearItem.createWithOptions(CombatItems.YYJ_HELMET));
                 output.accept(GearItem.createWithOptions(CombatItems.YYJ_CHESTPLATE));
                 output.accept(GearItem.createWithOptions(CombatItems.YYJ_LEGGINGS));
                 output.accept(GearItem.createWithOptions(CombatItems.YYJ_BOOTS));
-                // 랜덤 상자
                 output.accept(CombatItems.WEAPON_BOX);
                 output.accept(CombatItems.ARMOR_BOX);
-                // 강화대 + 강화석
                 output.accept(new ItemStack(CombatItems.ENHANCE_TABLE));
-                output.accept(CombatItems.ENHANCE_STONE);
-                // 보석
+                output.accept(CombatItems.ENHANCE_STONE_BASIC);
+                output.accept(CombatItems.ENHANCE_STONE_MID);
+                output.accept(CombatItems.ENHANCE_STONE_HIGH);
+                output.accept(CombatItems.GEM_BASIC);
+                output.accept(CombatItems.GEM_MID);
+                output.accept(CombatItems.GEM_HIGH);
                 output.accept(CosmodItems.RUBY);
                 output.accept(CosmodItems.SAPPHIRE);
                 output.accept(CosmodItems.RED_DIAMOND);
-                // 던전 티켓
                 output.accept(DungeonItems.DUNGEON_TICKET);
             })
             .build();
-
         Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, key, tab);
     }
 }
