@@ -28,7 +28,6 @@ public class JobScreen extends Screen {
         this.clearWidgets();
         int btnW = 85, btnH = 24, gap = 8;
 
-        // 생활직업 (3개 1행)
         JobClass[] life = JobClass.lifeJobs();
         int lx = left + (W - (life.length * (btnW + gap) - gap)) / 2;
         for (int i = 0; i < life.length; i++) {
@@ -38,7 +37,6 @@ public class JobScreen extends Screen {
                     .bounds(lx + i * (btnW + gap), top + 68, btnW, btnH).build());
         }
 
-        // 전투직업 (4개 2행×2열)
         JobClass[] combat = JobClass.combatJobs();
         int cx2 = left + (W - (2 * (btnW + gap) - gap)) / 2;
         for (int i = 0; i < combat.length; i++) {
@@ -86,11 +84,9 @@ public class JobScreen extends Screen {
         g.drawCenteredString(font, "§b§l✦ 직업 선택 ✦", cx, top + 10, 0xFFFFFF);
         g.drawCenteredString(font, "§f생활직업 1개 + 전투직업 1개를 선택할 수 있습니다", cx, top + 23, 0xDDDDDD);
         g.drawCenteredString(font, "§e선택/변경 비용: §6§l" + JOB_COST + " 코인", cx, top + 36, 0xFFFFFF);
-
         g.fill(left + 10, top + 50, left + W - 10, top + 51, 0xFF33AA33);
         g.drawCenteredString(font, "§a§l── 생활직업 ──", cx, top + 55, 0x55FF55);
         g.drawCenteredString(font, "§f광부 / 농사꾼 / 요리사", cx, top + 97, 0xCCCCCC);
-
         g.fill(left + 10, top + 115, left + W - 10, top + 116, 0xFFAA3333);
         g.drawCenteredString(font, "§c§l── 전투직업 ──", cx, top + 120, 0xFF5555);
         g.drawCenteredString(font, "§f전사 / 궁수 / 마법사 / 무도가", cx, top + 205, 0xCCCCCC);
