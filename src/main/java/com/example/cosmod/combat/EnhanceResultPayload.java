@@ -6,9 +6,10 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.ItemStack;
 
-/** S→C: 강화 결과 (메시지, 색상, 특별연출) */
-public record EnhanceResultPayload(String message, int color, boolean isSpecial)
+public record EnhanceResultPayload(String message, int color, boolean isSpecial,
+                                   int gearSlotIdx, ItemStack resultGear)
         implements CustomPacketPayload {
 
     public static final Type<EnhanceResultPayload> TYPE =
@@ -16,11 +17,14 @@ public record EnhanceResultPayload(String message, int color, boolean isSpecial)
 
     public static final StreamCodec<RegistryFriendlyByteBuf, EnhanceResultPayload> CODEC =
         StreamCodec.composite(
-            ByteBufCodecs.STRING_UTF8, EnhanceResultPayload::message,
-            ByteBufCodecs.INT,         EnhanceResultPayload::color,
-            ByteBufCodecs.BOOL,        EnhanceResultPayload::isSpecial,
+            ByteBufCodecs.STRING_UTF8,  EnhanceResultPayload::message,
+            ByteBufCodecs.INT,          EnhanceResultPayload::color,
+            ByteBufCodecs.BOOL,         EnhanceResultPayload::isSpecial,
+            ByteBufCodecs.INT,          EnhanceResultPayload::gearSlotIdx,
+            ItemStack.STREAM_CODEC,     EnhanceResultPayload::resultGear,
             EnhanceResultPayload::new
         );
 
-    @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    @Override
+    public Type<? extends CustomPacketPayload> type() { return TYPE; }
 }
