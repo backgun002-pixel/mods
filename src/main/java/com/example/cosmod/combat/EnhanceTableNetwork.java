@@ -27,12 +27,8 @@ public class EnhanceTableNetwork {
                 int stoneType = payload.stoneType();
                 ItemStack gear  = inv.getItem(gearIdx);
                 ItemStack stone = inv.getItem(stoneIdx);
-                if (gear.isEmpty() || !(gear.getItem() instanceof GearItem)) {
-                    msg(player, "§c강화 가능한 장비가 아닙니다."); return;
-                }
-                if (stone.isEmpty()) {
-                    msg(player, "§c강화석 또는 보석이 없습니다."); return;
-                }
+                if (gear.isEmpty() || !(gear.getItem() instanceof GearItem)) { msg(player, "§c강화 가능한 장비가 아닙니다."); return; }
+                if (stone.isEmpty()) { msg(player, "§c강화석 또는 보석이 없습니다."); return; }
                 if (stoneType == 3) {
                     if (!(stone.getItem() instanceof GemItem gi)) { msg(player, "§c보석 아이템이 아닙니다."); return; }
                     if (!GemItem.isIdentified(stone)) { msg(player, "§c감정되지 않은 보석입니다. 먼저 우클릭으로 감정하세요."); return; }
@@ -65,12 +61,16 @@ public class EnhanceTableNetwork {
                 switch (result) {
                     case SUCCESS -> {
                         boolean special = afterLevel >= 7;
-                        String msg = special ? "★ 강화 성공! +" + afterLevel + " ★" : "✦ 강화 성공!  +" + beforeLevel + " → +" + afterLevel;
+                        String msg = special
+                            ? "§a§l강화에 성공했습니다! §e§l현재 +" + afterLevel + " ★"
+                            : "§a강화에 성공했습니다! §e현재 +" + afterLevel;
                         int color = special ? 0xFFD700 : 0x55FF55;
                         ServerPlayNetworking.send(player, new EnhanceResultPayload(msg, color, special, gearIdx, gear.copy()));
                     }
                     case FAIL -> {
-                        String msg2 = (afterLevel < beforeLevel) ? "✗ 강화 실패.  +" + beforeLevel + " → +" + afterLevel : "✗ 강화 실패.  현재 +" + afterLevel;
+                        String msg2 = (afterLevel < beforeLevel)
+                            ? "§c강화에 실패했습니다. §7현재 +" + afterLevel + " §8(하락)"
+                            : "§c강화에 실패했습니다. §7현재 +" + afterLevel;
                         ServerPlayNetworking.send(player, new EnhanceResultPayload(msg2, 0xFF5555, false, gearIdx, gear.copy()));
                     }
                 }
