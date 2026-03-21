@@ -29,7 +29,6 @@ public class CosmodWeapons {
         WIND_REAPER   = reg("windreaper",     new WindReaper(props("windreaper")));
     }
 
-    // 1.21.11: Item.Properties에 setId() 필수
     private static Item.Properties props(String id) {
         ResourceKey<Item> key = ResourceKey.create(Registries.ITEM,
             Identifier.fromNamespaceAndPath(CosmodMod.MOD_ID, id));
