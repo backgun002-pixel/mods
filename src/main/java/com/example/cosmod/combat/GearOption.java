@@ -1,58 +1,62 @@
 package com.example.cosmod.combat;
 
 public enum GearOption {
-    // 공격
-    BONUS_ATK("공격력 +", true),
-    ATK_SPEED("공격속도 +", true),
+    // ── 메인 옵션 (무기용) ────────────────────────────────
+    ATK_PERCENT("공격력", "%", true, false, 5, 25),
+    ATK_SPEED("공격속도", "%", true, false, 3, 15),
+    CRIT_CHANCE("치명타 확률", "%", true, false, 3, 15),
 
-    // 방어/생존
-    DEFENSE("방어력 +", false),
-    BONUS_DEF("방어력 +", false),
-    MAX_HP("최대 체력 +", false),
-    BONUS_HP("최대 체력 +", false),
+    // ── 메인 옵션 (방어구용) ─────────────────────────────
+    DEFENSE("방어력", "", false, true, 2, 10),
+    MAX_HP("생명력", "", false, true, 2, 20),
+    CRIT_CHANCE_DEF("치명타 확률", "%", false, true, 2, 10),
 
-    // 이동
-    MOVE_SPEED("이동속도 +", true),
-    JUMP_BOOST("점프력 +", true),
-
-    // 치명타
-    CRIT_CHANCE("치명타 확률 +", true),
-    CRIT_DAMAGE("치명타 피해 +", true),
-    CRIT_CHANCE_DEF("치명타 방어 +", false),
-
-    // 보석 전용
-    GEM_ATK("공격력 +", true),
-    GEM_DEF("방어력 +", false),
-    GEM_HP("최대 체력 +", false),
-    GEM_SPD("이동속도 +", true),
-    GEM_CRIT("치명타 확률 +", true),
-    GEM_MAGIC("마법 피해 +", true),
-    GEM_HOLY("신성 피해 +", true),
-    ;
+    // ── 부옵션 (공용) ────────────────────────────────────
+    MOVE_SPEED("이동속도", "%", true, true, 2, 8),
+    CRIT_DAMAGE("치명타 데미지", "%", true, true, 5, 20),
+    BONUS_ATK("공격력", "", true, true, 1, 8),
+    BONUS_DEF("방어력", "", true, true, 1, 6),
+    BONUS_HP("생명력", "", true, true, 2, 10),
+    JUMP_BOOST("점프력", "", true, true, 1, 3);
 
     public final String displayName;
-    public final boolean isOffensive;
+    public final String unit;
+    public final boolean forWeapon;
+    public final boolean forArmor;
+    public final int minVal;
+    public final int maxVal;
 
-    GearOption(String name, boolean offensive) {
+    GearOption(String name, String unit, boolean forWeapon, boolean forArmor, int min, int max) {
         this.displayName = name;
-        this.isOffensive = offensive;
+        this.unit        = unit;
+        this.forWeapon   = forWeapon;
+        this.forArmor    = forArmor;
+        this.minVal      = min;
+        this.maxVal      = max;
     }
 
-    /** 보석 전용 옵션 이름 목록 (GemTier에서 사용) */
+    // 메인옵션 무기 목록
+    public static GearOption[] mainWeapon() {
+        return new GearOption[]{ATK_PERCENT, ATK_SPEED, CRIT_CHANCE};
+    }
+
+    // 메인옵션 방어구 목록
+    public static GearOption[] mainArmor() {
+        return new GearOption[]{DEFENSE, MAX_HP, CRIT_CHANCE_DEF};
+    }
+
+    // 부옵션 목록
+    public static GearOption[] sub() {
+        return new GearOption[]{MOVE_SPEED, CRIT_DAMAGE, BONUS_ATK, BONUS_DEF, BONUS_HP, JUMP_BOOST};
+    }
+
+    // ── 보석 옵션 (마법력/신성력 제거 → 5종) ────────────────────
+    // 0=공격력, 1=이동속도, 2=치명타확률, 3=체력, 4=방어력
     public static final String[] GEM_OPT_NAMES = {
-        "공격력", "마법력", "신성력", "이동속도", "치명타확률", "체력", "방어력"
+        "공격력", "이동속도", "치명타확률", "체력", "방어력"
     };
 
-    public static GearOption gem(int idx) {
-        return switch (idx % 7) {
-            case 0 -> GEM_ATK;
-            case 1 -> GEM_MAGIC;
-            case 2 -> GEM_HOLY;
-            case 3 -> GEM_SPD;
-            case 4 -> GEM_CRIT;
-            case 5 -> GEM_HP;
-            case 6 -> GEM_DEF;
-            default -> GEM_ATK;
-        };
-    }
+    public static final String[] GEM_OPT_UNITS = {
+        "", "%", "%", "", ""
+    };
 }
