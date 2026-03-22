@@ -1,0 +1,228 @@
+package software.bernie.geckolib.cache;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.Strictness;
+import it.unimi.dsi.fastutil.Pair;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
+import software.bernie.geckolib.GeckoLibConstants;
+import software.bernie.geckolib.cache.animation.Animation;
+import software.bernie.geckolib.cache.model.BakedGeoModel;
+import software.bernie.geckolib.loading.definition.geometry.GeometryDescription;
+import software.bernie.geckolib.loading.json.ModelFormatVersion;
+import software.bernie.geckolib.loading.json.raw.*;
+import software.bernie.geckolib.loading.json.typeadapter.BakedAnimationsAdapter;
+import software.bernie.geckolib.loading.json.typeadapter.KeyFrameMarkersAdapter;
+import software.bernie.geckolib.loading.object.BakedAnimations;
+import software.bernie.geckolib.loading.object.BakedModelFactory;
+import software.bernie.geckolib.loading.object.GeometryTree;
+import software.bernie.geckolib.model.GeoModel;
+import software.bernie.geckolib.object.CompoundException;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.resources.PreparableReloadListener;
+import net.minecraft.server.packs.resources.PreparableReloadListener.PreparationBarrier;
+import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.util.GsonHelper;
+
+/**
+ * Cache class for holding loaded {@link Animation Animations}
+ * and {@link GeoModel Models}
+ */
+public final class GeckoLibResources {
+	public static final Identifier RELOAD_LISTENER_ID = GeckoLibConstants.id("geckolib_resources");
+	public static final Identifier ANIMATIONS_PATH = GeckoLibConstants.id("geckolib/animations");
+	public static final Identifier MODELS_PATH = GeckoLibConstants.id("geckolib/models");
+	public static final Pattern SUFFIX_STRIPPER = Pattern.compile("((\\.geo)|((\\.animation)s?))?(\\.json)$");
+	public static final Pattern PREFIX_STRIPPER = Pattern.compile("^(geckolib/)((animations/)|(models/))?");
+	public static final Gson GSON = new GsonBuilder().setStrictness(Strictness.LENIENT)
+			.registerTypeAdapter(Bone.class, Bone.deserializer())
+			.registerTypeAdapter(Cube.class, Cube.deserializer())
+			.registerTypeAdapter(FaceUV.class, FaceUV.deserializer())
+			.registerTypeAdapter(LocatorClass.class, LocatorClass.deserializer())
+			.registerTypeAdapter(LocatorValue.class, LocatorValue.deserializer())
+			.registerTypeAdapter(MinecraftGeometry.class, MinecraftGeometry.deserializer())
+			.registerTypeAdapter(Model.class, Model.deserializer())
+			.registerTypeAdapter(GeometryDescription.class, GeometryDescription.gsonDeserializer())
+			.registerTypeAdapter(PolyMesh.class, PolyMesh.deserializer())
+			.registerTypeAdapter(PolysUnion.class, PolysUnion.deserializer())
+			.registerTypeAdapter(TextureMesh.class, TextureMesh.deserializer())
+			.registerTypeAdapter(UVFaces.class, UVFaces.deserializer())
+			.registerTypeAdapter(UVUnion.class, UVUnion.deserializer())
+			.registerTypeAdapter(Animation.KeyframeMarkers.class, KeyFrameMarkersAdapter.deserializer())
+			.registerTypeAdapter(BakedAnimations.class, BakedAnimationsAdapter.deserializer())
+			.create();
+
+	private static BakedAnimationCache ANIMATIONS = new BakedAnimationCache(Collections.emptyMap());
+	private static BakedModelCache MODELS = new BakedModelCache(Collections.emptyMap());
+
+	/**
+	 * Get GeckoLib's cache of all the loaded animations from the {@link #ANIMATIONS_PATH}
+	 */
+	public static BakedAnimationCache getBakedAnimations() {
+		return ANIMATIONS;
+	}
+
+	/**
+	 * Get GeckoLib's cache of all the loaded geo models from the {@link #MODELS_PATH}
+	 */
+	public static BakedModelCache getBakedModels() {
+		return MODELS;
+	}
+
+	@ApiStatus.Internal
+	public static CompletableFuture<Void> reload(PreparableReloadListener.SharedState sharedState, Executor prepExecutor, PreparationBarrier preparationBarrier, Executor applicationExecutor) {
+		CompletableFuture<Map<Identifier, BakedAnimations>> animations = loadAnimations(prepExecutor, sharedState.resourceManager());
+		CompletableFuture<Map<Identifier, BakedGeoModel>> models = loadModels(prepExecutor, sharedState.resourceManager());
+
+		return CompletableFuture.runAsync(() -> BakedAnimationsAdapter.COMPRESSION_CACHE = new ConcurrentHashMap<>(), prepExecutor)
+				.thenCompose(ignored -> CompletableFuture.allOf(animations, models).thenCompose(preparationBarrier::wait).thenRunAsync(() -> {
+					GeckoLibResources.ANIMATIONS = new BakedAnimationCache(animations.join());
+					GeckoLibResources.MODELS = new BakedModelCache(models.join());
+					BakedAnimationsAdapter.COMPRESSION_CACHE = null;
+				}, applicationExecutor));
+	}
+
+	/**
+	 * Strip the asset prefix and suffix from the given filepath, returning the stripped location
+	 *
+	 * @return The stripped location, or the original path if no match is found
+	 */
+	public static Identifier stripPrefixAndSuffix(Identifier path) {
+		String newPath = path.getPath();
+		Matcher prefixMatcher = PREFIX_STRIPPER.matcher(newPath);
+		newPath = prefixMatcher.find() ? newPath.substring(prefixMatcher.end()) : newPath;
+		Matcher suffixMatcher = SUFFIX_STRIPPER.matcher(newPath);
+		newPath = suffixMatcher.find() ? newPath.substring(0, suffixMatcher.start()) : newPath;
+
+		return newPath.length() == path.getPath().length() ? path : path.withPath(newPath);
+	}
+
+	/**
+	 * Provide a {@link Future} for retrieving and baking all animation JSONs from the {@link #ANIMATIONS_PATH}
+	 */
+	private static CompletableFuture<Map<Identifier, BakedAnimations>> loadAnimations(Executor backgroundExecutor, ResourceManager resourceManager) {
+		return bakeJsonResources(backgroundExecutor, resourceManager, ANIMATIONS_PATH.getPath(), GeckoLibResources::bakeAnimations,
+								 ex -> new BakedAnimations(new Object2ObjectOpenHashMap<>()));
+	}
+
+	/**
+	 * Provide a {@link Future} for retrieving and baking all geo model JSONs from the {@link #MODELS_PATH}
+	 */
+	private static CompletableFuture<Map<Identifier, BakedGeoModel>> loadModels(Executor backgroundExecutor, ResourceManager resourceManager) {
+		return bakeJsonResources(backgroundExecutor, resourceManager, MODELS_PATH.getPath(), GeckoLibResources::bakeModel,
+								 ex -> null);
+	}
+
+	/**
+	 * Retrieve all asset JSON files from a given location, then bake them into their final form.
+	 * <p>
+	 * Automatically handles sequentially managed file I/O and parallelized task deployment
+	 */
+	private static <BAKED> CompletableFuture<Map<Identifier, BAKED>> bakeJsonResources(Executor backgroundExecutor, ResourceManager resourceManager, String assetPath,
+																							 BiFunction<Identifier, JsonObject, BAKED> elementFactory, Function<Throwable, @Nullable BAKED> exceptionalFactory) {
+		return loadResources(backgroundExecutor, resourceManager, assetPath, "json", GeckoLibResources::readJsonFile)
+				.thenCompose(resources -> {
+					List<CompletableFuture<Pair<Identifier, BAKED>>> tasks = new ObjectArrayList<>(resources.size());
+
+					resources.forEach(pair -> tasks.add(CompletableFuture.supplyAsync(() -> Pair.of(stripPrefixAndSuffix(pair.left()), elementFactory.apply(pair.left(), pair.right())), backgroundExecutor)
+																.exceptionally(ex -> {
+                                                                    //noinspection CallToPrintStackTrace
+                                                                    ex.printStackTrace();
+
+																	return Pair.of(pair.left(), exceptionalFactory.apply(ex));
+																})));
+
+					return CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0]))
+							.thenApply(ignored -> tasks.stream().map(CompletableFuture::join).filter(Objects::nonNull).collect(Collectors.toMap(Pair::left, Pair::right)));
+				});
+	}
+
+	/**
+	 * Load a set of resources from their respective files for all available namespaces, into their raw/unbaked format ready for further processing.
+	 * <p>
+	 * This step is separated to prevent parallelized file I/O
+	 */
+	private static <UNBAKED> CompletableFuture<List<Pair<Identifier, UNBAKED>>> loadResources(Executor executor, ResourceManager resourceManager, String assetPath, String fileType, BiFunction<Identifier, Resource, UNBAKED> elementFactory) {
+		final String fileTypeSuffix = "." + fileType;
+
+		return CompletableFuture.supplyAsync(() -> resourceManager.listResources(assetPath, fileName -> fileName.getPath().endsWith(fileTypeSuffix)), executor)
+				.thenCompose(resources -> {
+					List<CompletableFuture<Pair<Identifier, UNBAKED>>> tasks = new ObjectArrayList<>(resources.size());
+
+					resources.forEach((path, resource) -> tasks.add(CompletableFuture.supplyAsync(() -> Pair.of(path, elementFactory.apply(path, resource)), executor)));
+
+					return CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).thenApply(ignored -> tasks.stream().map(CompletableFuture::join).filter(Objects::nonNull).toList());
+				});
+	}
+
+	/**
+	 * Bake a {@link BakedGeoModel} from its {@link JsonObject} serialized form
+	 */
+	private static BakedGeoModel bakeModel(Identifier path, JsonObject json) {
+		if (path.getPath().endsWith(".animation.json"))
+			throw new RuntimeException("Found animation file found in models folder! '" + path + "'");
+
+		Model model = GSON.fromJson(json, Model.class);
+		ModelFormatVersion matchedVersion = ModelFormatVersion.match(model.formatVersion());
+
+		if (matchedVersion == null) {
+            GeckoLibConstants.LOGGER.warn("{}: Unknown geo model format version: '{}'. This may not work correctly", path, model.formatVersion());
+		}
+		else if (!matchedVersion.isSupported()) {
+            GeckoLibConstants.LOGGER.error("{}: Unsupported geo model format version: '{}'. {}", path, model.formatVersion(), matchedVersion.getErrorMessage());
+		}
+
+		return BakedModelFactory.getForNamespace(path.getNamespace()).constructGeoModel(GeometryTree.fromModel(model));
+	}
+
+	/**
+	 * Bake the {@link BakedAnimations} from a {@link JsonObject} serialized form
+	 */
+	private static BakedAnimations bakeAnimations(Identifier path, JsonObject json) {
+		if (path.getPath().endsWith(".geo.json"))
+			throw new RuntimeException("Found model file in animations folder! '" + path + "'");
+
+		try {
+			return GSON.fromJson(GsonHelper.getAsJsonObject(json, "animations"), BakedAnimations.class);
+		}
+		catch (CompoundException ex) {
+			throw ex.withMessage(path + ": Error building animations from JSON");
+		}
+		catch (Exception ex) {
+			throw GeckoLibConstants.exception(path, "Error building animations from JSON", ex);
+		}
+	}
+
+	/**
+	 * Read a single resource into its {@link JsonObject} form
+	 */
+	private static JsonObject readJsonFile(Identifier id, Resource resource) {
+		try (Reader reader = resource.openAsReader()) {
+			return GsonHelper.parse(reader);
+		}
+		catch (IOException ex) {
+			throw GeckoLibConstants.exception(id, "Error reading JSON file", ex);
+		}
+	}
+}

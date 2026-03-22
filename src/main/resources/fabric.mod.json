@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "cosmod",
+  "version": "${version}",
+  "name": "Cosmod",
+  "description": "코디 아이템 및 전용 슬롯 모드",
+  "authors": ["YourName"],
+  "environment": "*",
+  "entrypoints": {
+    "main":   ["com.example.cosmod.CosmodMod"],
+    "client": ["com.example.cosmod.CosmodClient"]
+  },
+  "mixins": [
+    "cosmod.mixins.json",
+    "cosmod.client.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "fabric-api":   "*",
+    "minecraft":    "~1.21.11",
+    "java":         ">=21"
+  },
+  "custom": {
+    "geckolib": {}
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "cosmod:block/pepper_crop_stage3"
+  }
+}

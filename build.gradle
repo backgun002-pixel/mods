@@ -1,0 +1,36 @@
+plugins {
+    id 'fabric-loom' version '1.15-SNAPSHOT'
+    id 'maven-publish'
+}
+version = project.mod_version
+group   = project.maven_group
+base { archivesName = project.archives_base_name }
+
+repositories {
+    maven {
+        name = 'GeckoLib'
+        url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+        content { includeGroup("software.bernie.geckolib") }
+    }
+}
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // 5.4-alpha-1 → 5.4.5 업그레이드 (AnimationTest, PlayState 포함)
+    modImplementation "software.bernie.geckolib:geckolib-fabric-1.21.11:5.4.5"
+    include "software.bernie.geckolib:geckolib-fabric-1.21.11:5.4.5"
+}
+processResources {
+    inputs.property "version", project.version
+    filteringCharset "UTF-8"
+    filesMatching("fabric.mod.json") { expand "version": project.version }
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+}
+jar { from("LICENSE") { rename { "${it}_${project.base.archivesName.get()}" } } }

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "cosmod:block/tomato_crop_stage1"
+  }
+}

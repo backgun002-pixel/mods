@@ -1,0 +1,33 @@
+{
+  "type": "minecraft:entity",
+  "pools": [
+    {
+      "bonus_rolls": 0.0,
+      "entries": [
+        {
+          "type": "minecraft:empty",
+          "weight": 199
+        },
+        {
+          "type": "minecraft:item",
+          "name": "cosmod:weapon_box",
+          "weight": 1
+        },
+        {
+          "type": "minecraft:item",
+          "name": "cosmod:armor_box",
+          "weight": 1
+        }
+      ],
+      "rolls": 1.0
+    },
+    {
+      "bonus_rolls": 0.0,
+      "entries": [
+        {"type": "minecraft:item", "functions": [{"function": "minecraft:set_count", "count": {"min": 0, "max": 2, "type": "minecraft:uniform"}}], "name": "minecraft:bone"},
+        {"type": "minecraft:item", "functions": [{"function": "minecraft:set_count", "count": {"min": 0, "max": 2, "type": "minecraft:uniform"}}], "name": "minecraft:arrow"}
+      ],
+      "rolls": 1.0
+    }
+  ]
+}
