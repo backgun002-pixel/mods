@@ -1,7 +1,6 @@
 package com.example.cosmod.combat;
 
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.minecraft.network.chat.Style;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,19 +20,31 @@ public class EnhanceTableNetwork {
         ServerPlayNetworking.registerGlobalReceiver(EnhanceRequestPayload.TYPE,
             (payload, ctx) -> ctx.server().execute(() -> {
                 ServerPlayer player = ctx.player();
-                var inv = player.getInventory();
-                int gearIdx  = payload.gearSlotIdx();
-                int stoneIdx = payload.stoneSlotIdx();
-                int stoneType = payload.stoneType();
-                ItemStack gear  = inv.getItem(gearIdx);
-                ItemStack stone = inv.getItem(stoneIdx);
-                if (gear.isEmpty() || !(gear.getItem() instanceof GearItem)) { msg(player, "§c강화 가능한 장비가 아닙니다."); return; }
-                if (stone.isEmpty()) { msg(player, "§c강화석 또는 보석이 없습니다."); return; }
+
+                // 클라이언트에서 아이템 자체를 전송받음 (슬롯 인덱스 방식 X)
+                ItemStack gear  = payload.gearItem().copy();
+                ItemStack stone = payload.stoneItem().copy();
+                int stoneType   = payload.stoneType();
+
+                if (gear.isEmpty() || !(gear.getItem() instanceof GearItem)) {
+                    msg(player, "§c강화 가능한 장비가 아닙니다."); return;
+                }
+                if (stone.isEmpty()) {
+                    msg(player, "§c강화석 또는 보석이 없습니다."); return;
+                }
+
+                // ── 보석 장착 (stoneType == 3) ───────────────────
                 if (stoneType == 3) {
-                    if (!(stone.getItem() instanceof GemItem gi)) { msg(player, "§c보석 아이템이 아닙니다."); return; }
-                    if (!GemItem.isIdentified(stone)) { msg(player, "§c감정되지 않은 보석입니다. 먼저 우클릭으로 감정하세요."); return; }
+                    if (!(stone.getItem() instanceof GemItem gi)) {
+                        msg(player, "§c보석 아이템이 아닙니다."); return;
+                    }
+                    if (!GemItem.isIdentified(stone)) {
+                        msg(player, "§c감정되지 않은 보석입니다. 먼저 우클릭으로 감정하세요."); return;
+                    }
                     var gearTag = GearItem.getGearTag(gear);
-                    if (gearTag.contains("enhanced") && gearTag.getBoolean("enhanced").orElse(false)) { msg(player, "§c이미 보석이 장착된 장비입니다."); return; }
+                    if (gearTag.contains("enhanced") && gearTag.getBoolean("enhanced").orElse(false)) {
+                        msg(player, "§c이미 보석이 장착된 장비입니다."); return;
+                    }
                     net.minecraft.nbt.CompoundTag gemTag = GemItem.getGemTag(stone);
                     int lines = gi.getTier().optionLines;
                     for (int ii = 0; ii < lines; ii++) {
@@ -46,32 +57,35 @@ public class EnhanceTableNetwork {
                     gearTag.putInt("gem_lines", lines);
                     gearTag.putBoolean("enhanced", true);
                     GearItem.setGearTag(gear, gearTag);
-                    stone.shrink(1);
-                    inv.setItem(stoneIdx, stone);
-                    inv.setItem(gearIdx, gear);
-                    ServerPlayNetworking.send(player, new EnhanceResultPayload("§b✦ 보석 장착 성공!", 0x55CCFF, false, gearIdx, gear.copy()));
+
+                    // 결과 아이템만 클라이언트로 전송 (인벤토리에 직접 안 넣음)
+                    ServerPlayNetworking.send(player,
+                        new EnhanceResultPayload("§b✦ 보석 장착 성공!", 0x55CCFF, false, gear));
                     return;
                 }
+
+                // ── 강화 처리 ─────────────────────────────────────
                 int beforeLevel = GearItem.getEnhanceLevel(gear);
-                stone.shrink(1);
-                inv.setItem(stoneIdx, stone);
                 GearItem.EnhanceResult result = GearItem.enhance(gear, stoneType);
-                inv.setItem(gearIdx, gear);
                 int afterLevel = GearItem.getEnhanceLevel(gear);
+
+                // 결과 아이템만 클라이언트로 전송
                 switch (result) {
                     case SUCCESS -> {
                         boolean special = afterLevel >= 7;
                         String msg = special
-                            ? "§a§l강화에 성공했습니다! §e§l현재 +" + afterLevel + " ★"
-                            : "§a강화에 성공했습니다! §e현재 +" + afterLevel;
+                            ? "§e§l★ 강화에 성공했습니다! §f현재 §e§l+" + afterLevel + " ★"
+                            : "§a✦ 강화에 성공했습니다! §f현재 §e+" + afterLevel;
                         int color = special ? 0xFFD700 : 0x55FF55;
-                        ServerPlayNetworking.send(player, new EnhanceResultPayload(msg, color, special, gearIdx, gear.copy()));
+                        ServerPlayNetworking.send(player,
+                            new EnhanceResultPayload(msg, color, special, gear));
                     }
                     case FAIL -> {
                         String msg2 = (afterLevel < beforeLevel)
-                            ? "§c강화에 실패했습니다. §7현재 +" + afterLevel + " §8(하락)"
-                            : "§c강화에 실패했습니다. §7현재 +" + afterLevel;
-                        ServerPlayNetworking.send(player, new EnhanceResultPayload(msg2, 0xFF5555, false, gearIdx, gear.copy()));
+                            ? "§c✗ 강화에 실패했습니다. §f현재 §c+" + afterLevel + " §8(하락)"
+                            : "§c✗ 강화에 실패했습니다. §f현재 §7+" + afterLevel;
+                        ServerPlayNetworking.send(player,
+                            new EnhanceResultPayload(msg2, 0xFF5555, false, gear));
                     }
                 }
             }));
